@@ -198,6 +198,30 @@
     };
   }
 
+  /* ---------- "as of" times and new-data notice ---------- */
+  function fmtStamp(iso) {
+    var d = new Date(iso); if (isNaN(d)) return String(iso || "");
+    var day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return /T\d/.test(String(iso)) ? day + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : day;
+  }
+  function showAsOf(ob) {
+    if (ob.ar_data && ob.ar_data.asOf) $("asofSquid").textContent = fmtStamp(ob.ar_data.asOf);
+    if (ob.email) $("asofEmail").textContent = fmtStamp(ob.email.checkedAt || ob.email.asOf);
+  }
+  // The scheduled email refresh rewrites board_files; tell people with the board open.
+  function watchForNewData(rows) {
+    var seen = {};
+    rows.forEach(function (r) { seen[r.name] = r.updated_at; });
+    $("freshBtn").addEventListener("click", function () { location.reload(); });
+    setInterval(function () {
+      sb.from("board_files").select("name,updated_at").in("name", FILES).then(function (r) {
+        if (r.error || !r.data) return;
+        var changed = r.data.some(function (x) { return seen[x.name] && x.updated_at !== seen[x.name]; });
+        if (changed) $("freshBar").hidden = false;
+      });
+    }, 3 * 60 * 1000);
+  }
+
   /* ---------- start the board once signed in and approved ---------- */
   var started = false;
   function start(session) {
@@ -213,7 +237,7 @@
       started = true;
       var name = (user.email || "").split("@")[0];
       sb.from("profiles").upsert({ id: user.id, name: name.charAt(0).toUpperCase() + name.slice(1) }, { onConflict: "id", ignoreDuplicates: true }).then(function () {});
-      return sb.from("board_files").select("name,data").in("name", FILES).then(function (f) {
+      return sb.from("board_files").select("name,data,updated_at").in("name", FILES).then(function (f) {
         if (f.error) { gateView("gForm"); gateMsg("Couldn’t load the board. Reload the page.", "warn"); started = false; return; }
         var ob = {};
         f.data.forEach(function (row) { ob[row.name] = row.data; });
@@ -231,6 +255,8 @@
         };
         installAdapter(user);
         $("whoami").textContent = user.email || "";
+        showAsOf(ob, f.data);
+        watchForNewData(f.data);
         if (location.hash === "" && /access_token=/.test(location.href)) history.replaceState(null, "", location.pathname);
         show("app");
         var s = document.createElement("script");

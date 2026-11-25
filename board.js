@@ -508,12 +508,12 @@
   function fuEmails(s){ return String(s || "").split(/[;,\s]+/).filter(function(x){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); }); }
   function mcpErrText(e, action){
     var c = e && e.code;
-    if (c === "server_not_connected") return "Outlook isn’t connected to Office Board yet.";
-    if (c === "needs_reauth") return "Outlook isn’t connected to Office Board yet.";
+    if (c === "server_not_connected") return "Connect Outlook first: click “Connect Outlook” at the top of the board.";
+    if (c === "needs_reauth") return "Outlook needs to be reconnected: click “Connect Outlook” at the top of the board.";
     if (c === "not_in_manifest" || c === "approval_required" || c === "consent_required") return "The board needs your OK to use Outlook. Press the button again and choose Allow.";
     if (c === "blocked_by_policy") return "Your organization blocks this Outlook action.";
     if (c === "selection_required") return "Choose which Microsoft 365 account to use in the prompt, then try again.";
-    if (c === "tool_error") return "Outlook refused: " + String(e.message || "").slice(0, 200);
+    if (c === "tool_error" || c === "invalid_argument") return "Outlook refused: " + String(e.message || "").slice(0, 200);
     if (c === "server_unavailable" || c === "upstream_error") return "Outlook didn’t answer. Check your Drafts folder before trying again" + (action === "send" ? " — it may have been sent." : " — it may already be there.");
     return "Outlook isn’t connected to Office Board yet. Copy the message into Outlook for now.";
   }

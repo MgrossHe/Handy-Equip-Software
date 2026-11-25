@@ -192,10 +192,56 @@
         if (name === "db") return Promise.resolve(db);
         if (name === "user") return Promise.resolve(userApi);
         if (name === "downloads") return Promise.resolve(downloads);
-        // Outlook (Microsoft 365) is not connected to the website yet.
+        if (name === "mcp") return Promise.resolve(outlookApi);
         return Promise.resolve(null);
       }
     };
+  }
+
+  /* ---------- Outlook (Microsoft 365) through the ms-api server function ----------
+   * Each person connects their own Outlook once ("Connect Outlook"). The board's
+   * follow-up email buttons then save drafts to, and send from, that person's mailbox.
+   */
+  function msCall(body) {
+    return sb.functions.invoke("ms-api", { body: body }).then(function (r) {
+      if (!r.error) return r.data;
+      var ctx = r.error.context;
+      return (ctx && typeof ctx.json === "function" ? ctx.json().catch(function () { return {}; }) : Promise.resolve({}))
+        .then(function (b) {
+          var e = new Error((b.error && b.error.message) || "Outlook didn’t answer.");
+          e.code = (b.error && b.error.code) || "upstream_error";
+          throw e;
+        });
+    });
+  }
+  // Same shape as the claude.ai connector the board was written for.
+  var outlookApi = {
+    callTool: function (server, tool, args) {
+      if (tool === "outlook_create_draft") {
+        return msCall({ action: "create_draft", to: args.to, subject: args.subject, body: args.body, bodyType: args.bodyType })
+          .then(function (d) { return { payload: { id: d.id, webLink: d.webLink } }; });
+      }
+      if (tool === "outlook_send_draft") return msCall({ action: "send_draft", messageId: args.messageId }).then(function () { return { payload: {} }; });
+      var e = new Error("Not available"); e.code = "not_in_manifest"; return Promise.reject(e);
+    }
+  };
+  function olNotice(text) { $("olMsg").textContent = text; $("olBar").hidden = false; }
+  function setupOutlook() {
+    $("olClose").addEventListener("click", function () { $("olBar").hidden = true; });
+    $("olBtn").addEventListener("click", function () {
+      var b = this; b.disabled = true; b.textContent = "Opening Microsoft…";
+      msCall({ action: "start" }).then(function (d) { location.href = d.url; })
+        .catch(function (e) { b.disabled = false; b.textContent = "Connect Outlook"; olNotice(e.message); });
+    });
+    var qs2 = new URLSearchParams(location.search);
+    if (qs2.get("outlook") === "connected") olNotice("Outlook is connected. Follow-up emails now save to your Outlook Drafts.");
+    if (qs2.get("outlook_error")) olNotice(qs2.get("outlook_error"));
+    if (qs2.has("outlook") || qs2.has("outlook_error")) history.replaceState(null, "", location.pathname + location.hash);
+    msCall({ action: "status" }).then(function (d) {
+      $("olBtn").hidden = !!d.connected;
+      $("olState").hidden = !d.connected;
+      if (d.ms_email) $("olState").title = d.ms_email;
+    }).catch(function () { $("olBtn").hidden = false; });
   }
 
   /* ---------- "as of" times and new-data notice ---------- */
@@ -256,11 +302,12 @@
         installAdapter(user);
         $("whoami").textContent = user.email || "";
         showAsOf(ob, f.data);
+        setupOutlook();
         watchForNewData(f.data);
         if (location.hash === "" && /access_token=/.test(location.href)) history.replaceState(null, "", location.pathname);
         show("app");
         var s = document.createElement("script");
-        s.src = "board.js?v=1";
+        s.src = "board.js?v=2";
         document.body.appendChild(s);
       });
     });

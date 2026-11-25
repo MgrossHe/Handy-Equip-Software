@@ -271,7 +271,7 @@
   <div class="wrap">
     <div class="top">
       <div class="brand"><h1>Handy Equip — Office Board</h1><div class="sub">AR · customers · purchasing · email</div></div>
-      <div class="userbox"><span id="whoami"></span><button class="btn2" id="signOut" type="button">Sign out</button></div>
+      <div class="userbox"><span id="whoami"></span><button class="btn2" id="olBtn" type="button" hidden>Connect Outlook</button><span id="olState" class="chip green" hidden>Outlook connected</span><button class="btn2" id="signOut" type="button">Sign out</button></div>
       <div class="asof">Squid data: <b id="asofSquid">Nov 23, 2026</b> · email checked <b id="asofEmail">Nov 24</b><br><span id="asofNote">Email refreshes automatically on workdays</span></div>
     </div>
     <nav class="tabs main" aria-label="Main sections">
@@ -296,6 +296,7 @@
   </div>
 </header>
 
+<div id="olBar" class="wrap" hidden><div class="banner" role="status" style="margin-top:12px"><span class="dot"></span><p style="flex:1" id="olMsg"></p><button class="btn2" type="button" id="olClose">OK</button></div></div>
 <div id="freshBar" class="wrap" hidden><div class="banner" role="status" style="margin-top:12px"><span class="dot"></span><p style="flex:1">New email data is available.</p><button class="btn2" type="button" id="freshBtn">Refresh</button></div></div>
 <main class="wrap">
 
@@ -503,6 +504,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

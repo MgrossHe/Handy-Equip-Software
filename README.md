@@ -20,6 +20,8 @@ Handy Equip's internal office board: AR, customers (sales/service requests), pur
 | `app.js` | Sign-in, permission check, and the adapter that stores notes/requests in Supabase |
 | `board.js` | The board itself (tabs, tables, Excel downloads) |
 | `vercel.json` | Security headers; keeps the site out of search engines |
+| `supabase/functions/shared-login` | Shared-password sign-in |
+| `supabase/functions/ms-api`, `ms-callback`, `_shared/ms.ts` | Outlook connection (Microsoft Graph, delegated): Connect Outlook, save draft, send |
 
 ## Access
 
@@ -31,3 +33,12 @@ See who signed in (Supabase SQL editor):
 ```sql
 select at, email, ok from public.login_attempts order by at desc limit 50;
 ```
+
+## Outlook
+
+Each person clicks **Connect Outlook** once and approves with their own Microsoft login
+(Entra app "Office Board", delegated permissions: User.Read, offline_access, Mail.ReadWrite,
+Mail.Send, Contacts.Read, Calendars.ReadWrite). The Microsoft account must match the board
+email. Refresh tokens are stored encrypted in `ms_connections` (server-only). The client
+secret lives only in the Supabase Edge Function secret `MS_CLIENT_SECRET`; it expires after
+24 months and must then be renewed in Azure and replaced in Supabase.

@@ -254,9 +254,17 @@
       <button class="dlbtn" id="gBtn" type="submit">Email me a sign-in link</button>
       <span class="dlmsg" id="gateMsg" role="status"></span>
     </form>
-    <div id="gSent" hidden>
-      <p>Check your inbox at <b id="gSentTo"></b> and click the link to open the board. It can take a minute; check spam if it doesn’t arrive.</p>
+    <form id="gSent" hidden novalidate>
+      <p>We emailed a 6-digit code to <b id="gSentTo"></b>. Type it here. It can take a minute; check spam if it doesn’t arrive.</p>
+      <label class="fl"><span>Code from the email</span><input id="gCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="123456"></label>
+      <button class="dlbtn" id="gCodeBtn" type="submit">Sign in</button>
+      <span class="dlmsg" id="gCodeMsg" role="status"></span>
       <button class="btn2" id="gBack" type="button">Use a different email</button>
+    </form>
+    <div id="gLink" hidden>
+      <p>Press the button to finish signing in.</p>
+      <button class="dlbtn" id="gLinkBtn" type="button">Sign in to Office Board</button>
+      <span class="dlmsg" id="gLinkMsg" role="status"></span>
     </div>
     <div id="gDenied" hidden>
       <p><b id="gDeniedEmail"></b> isn’t approved for Office Board yet. Ask Mendel to add you.</p>
@@ -500,6 +508,6 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="app.js?v=1"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

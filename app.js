@@ -25,11 +25,25 @@
   }
   function gateMsg(text, cls) { var m = $("gateMsg"); m.textContent = text || ""; m.className = "dlmsg" + (cls ? " " + cls : ""); }
   function gateView(name) {
-    ["gForm", "gSent", "gDenied", "gLoading"].forEach(function (x) { $(x).hidden = x !== name; });
+    ["gForm", "gSent", "gLink", "gDenied", "gLoading"].forEach(function (x) { $(x).hidden = x !== name; });
     show("gate");
+    var focus = { gForm: "gEmail", gSent: "gCode", gLink: "gLinkBtn" }[name];
+    if (focus) setTimeout(function () { $(focus).focus(); }, 0);
+  }
+  function authErr(error, fallback) {
+    var m = (error && error.message) || "";
+    if (/rate limit/i.test(m)) return "Too many sign-in emails were sent in the last hour. Wait a while, then try again.";
+    if (/expired|invalid/i.test(m)) return "That code didn’t work or has expired. Check it, or send a new one.";
+    return m || fallback;
   }
 
-  /* ---------- sign-in ---------- */
+  /* ---------- sign-in ----------
+   * Sign-in uses a 6-digit code typed on this page, or an emailed link that opens this
+   * page with a "Sign in" button. Either way the one-time token is only used when a
+   * person acts, so company email link scanners (e.g. Microsoft Safe Links) that open
+   * links ahead of the reader can't use it up first.
+   */
+  var sentTo = "";
   $("gForm").addEventListener("submit", function (e) {
     e.preventDefault();
     var email = $("gEmail").value.trim().toLowerCase();
@@ -38,11 +52,40 @@
     sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } })
       .then(function (r) {
         btn.disabled = false;
-        if (r.error) { gateMsg(r.error.message || "Couldn’t send the link. Try again.", "warn"); return; }
+        if (r.error) { gateMsg(authErr(r.error, "Couldn’t send the email. Try again."), "warn"); return; }
         gateMsg("");
+        sentTo = email;
         $("gSentTo").textContent = email;
+        $("gCode").value = ""; $("gCodeMsg").textContent = "";
         gateView("gSent");
       });
+  });
+  $("gSent").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var code = $("gCode").value.replace(/\D/g, ""), msg = $("gCodeMsg"), btn = $("gCodeBtn");
+    if (code.length < 6) { msg.className = "dlmsg warn"; msg.textContent = "Type the code from the email."; return; }
+    btn.disabled = true; msg.className = "dlmsg"; msg.textContent = "Checking…";
+    sb.auth.verifyOtp({ email: sentTo, token: code, type: "email" }).then(function (r) {
+      btn.disabled = false;
+      if (r.error) { msg.className = "dlmsg warn"; msg.textContent = authErr(r.error, "Couldn’t sign in. Try again."); return; }
+      msg.textContent = "";
+      if (r.data && r.data.session) start(r.data.session);
+    });
+  });
+  // Emailed link: ?token_hash=…&type=… — wait for a person to press the button.
+  var qs = new URLSearchParams(location.search), linkHash = qs.get("token_hash"), linkType = qs.get("type") || "email";
+  $("gLinkBtn").addEventListener("click", function () {
+    var btn = this, msg = $("gLinkMsg");
+    btn.disabled = true; msg.className = "dlmsg"; msg.textContent = "Signing in…";
+    sb.auth.verifyOtp({ token_hash: linkHash, type: linkType }).then(function (r) {
+      history.replaceState(null, "", location.pathname);
+      if (r.error) {
+        gateView("gForm");
+        gateMsg("That sign-in link didn’t work or has expired. Send a new one.", "warn");
+        return;
+      }
+      if (r.data && r.data.session) start(r.data.session);
+    });
   });
   $("gBack").addEventListener("click", function () { gateView("gForm"); });
   $("gOut").addEventListener("click", signOut);
@@ -215,7 +258,8 @@
   });
   sb.auth.getSession().then(function (r) {
     var session = r.data && r.data.session;
-    if (session) start(session);
+    if (session) { if (linkHash) history.replaceState(null, "", location.pathname); start(session); }
+    else if (linkHash) gateView("gLink");
     else if (!/access_token=|error_description=/.test(location.hash)) gateView("gForm");
     if (/error_description=/.test(location.hash)) {
       gateView("gForm");

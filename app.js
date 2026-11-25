@@ -250,7 +250,9 @@
 
   /* ---------- "as of" times and new-data notice ---------- */
   function fmtStamp(iso) {
-    var d = new Date(iso); if (isNaN(d)) return String(iso || "");
+    // A plain date ("2026-11-23") is a calendar day, not midnight UTC — read it as local.
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+    var d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(iso); if (isNaN(d)) return String(iso || "");
     var day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     return /T\d/.test(String(iso)) ? day + ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : day;
   }

@@ -210,6 +210,10 @@
         .then(function (b) {
           var e = new Error((b.error && b.error.message) || "Outlook didn’t answer.");
           e.code = (b.error && b.error.code) || "upstream_error";
+          // The board sign-in ended on the server (e.g. signed out elsewhere): sign in again.
+          if (e.code === "unauthenticated") {
+            sb.auth.signOut().then(function () { location.reload(); });
+          }
           throw e;
         });
     });

@@ -25,52 +25,40 @@
   }
   function gateMsg(text, cls) { var m = $("gateMsg"); m.textContent = text || ""; m.className = "dlmsg" + (cls ? " " + cls : ""); }
   function gateView(name) {
-    ["gForm", "gSent", "gLink", "gDenied", "gLoading"].forEach(function (x) { $(x).hidden = x !== name; });
+    ["gForm", "gLink", "gDenied", "gLoading"].forEach(function (x) { $(x).hidden = x !== name; });
     show("gate");
-    var focus = { gForm: "gEmail", gSent: "gCode", gLink: "gLinkBtn" }[name];
+    var focus = { gForm: "gEmail", gLink: "gLinkBtn" }[name];
     if (focus) setTimeout(function () { $(focus).focus(); }, 0);
-  }
-  function authErr(error, fallback) {
-    var m = (error && error.message) || "";
-    if (/rate limit/i.test(m)) return "Too many sign-in emails were sent in the last hour. Wait a while, then try again.";
-    if (/expired|invalid/i.test(m)) return "That code didn’t work or has expired. Check it, or send a new one.";
-    return m || fallback;
   }
 
   /* ---------- sign-in ----------
-   * Sign-in uses a 6-digit code typed on this page, or an emailed link that opens this
-   * page with a "Sign in" button. Either way the one-time token is only used when a
-   * person acts, so company email link scanners (e.g. Microsoft Safe Links) that open
-   * links ahead of the reader can't use it up first.
+   * Work email + the shared office password. The password is checked on the server
+   * (Supabase function "shared-login"), which only accepts @handyequip.com emails,
+   * locks out repeated wrong guesses, and returns a one-time token that is exchanged
+   * here for a normal signed-in session.
    */
-  var sentTo = "";
   $("gForm").addEventListener("submit", function (e) {
     e.preventDefault();
-    var email = $("gEmail").value.trim().toLowerCase();
+    var email = $("gEmail").value.trim().toLowerCase(), password = $("gPass").value;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { gateMsg("Enter your work email.", "warn"); return; }
-    var btn = $("gBtn"); btn.disabled = true; gateMsg("Sending…");
-    sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } })
-      .then(function (r) {
-        btn.disabled = false;
-        if (r.error) { gateMsg(authErr(r.error, "Couldn’t send the email. Try again."), "warn"); return; }
-        gateMsg("");
-        sentTo = email;
-        $("gSentTo").textContent = email;
-        $("gCode").value = ""; $("gCodeMsg").textContent = "";
-        gateView("gSent");
-      });
-  });
-  $("gSent").addEventListener("submit", function (e) {
-    e.preventDefault();
-    var code = $("gCode").value.replace(/\D/g, ""), msg = $("gCodeMsg"), btn = $("gCodeBtn");
-    if (code.length < 6) { msg.className = "dlmsg warn"; msg.textContent = "Type the code from the email."; return; }
-    btn.disabled = true; msg.className = "dlmsg"; msg.textContent = "Checking…";
-    sb.auth.verifyOtp({ email: sentTo, token: code, type: "email" }).then(function (r) {
-      btn.disabled = false;
-      if (r.error) { msg.className = "dlmsg warn"; msg.textContent = authErr(r.error, "Couldn’t sign in. Try again."); return; }
-      msg.textContent = "";
+    if (!password) { gateMsg("Enter the password.", "warn"); return; }
+    var btn = $("gBtn"); btn.disabled = true; gateMsg("Signing in…");
+    fetch(SUPABASE_URL + "/functions/v1/shared-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY },
+      body: JSON.stringify({ email: email, password: password })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) { return { ok: res.ok, body: body }; });
+    }).then(function (r) {
+      if (!r.ok || !r.body.token_hash) throw new Error(r.body.error || "Couldn’t sign in. Try again.");
+      return sb.auth.verifyOtp({ token_hash: r.body.token_hash, type: "magiclink" });
+    }).then(function (r) {
+      if (r.error) throw new Error("Couldn’t sign in. Try again.");
+      $("gPass").value = ""; gateMsg("");
       if (r.data && r.data.session) start(r.data.session);
-    });
+    }).catch(function (err) {
+      gateMsg(err && /fetch|network/i.test(err.message) ? "Can’t reach the server. Check your connection." : (err.message || "Couldn’t sign in."), "warn");
+    }).then(function () { btn.disabled = false; });
   });
   // Emailed link: ?token_hash=…&type=… — wait for a person to press the button.
   var qs = new URLSearchParams(location.search), linkHash = qs.get("token_hash"), linkType = qs.get("type") || "email";
@@ -87,7 +75,6 @@
       if (r.data && r.data.session) start(r.data.session);
     });
   });
-  $("gBack").addEventListener("click", function () { gateView("gForm"); });
   $("gOut").addEventListener("click", signOut);
   $("signOut").addEventListener("click", signOut);
   function signOut() { sb.auth.signOut().then(function () { location.hash = ""; location.reload(); }); }

@@ -26,20 +26,35 @@ Deno.serve(async (req) => {
       return back({ outlook_error: "Microsoft didn't accept the sign-in. Try again." });
     }
 
-    const me = await fetch(`${GRAPH}/me?$select=mail,userPrincipalName`, { headers: { Authorization: `Bearer ${json.access_token}` } })
-      .then((r) => r.json()).catch(() => ({}));
+    const meRes = await fetch(`${GRAPH}/me?$select=mail,userPrincipalName,proxyAddresses,otherMails`, {
+      headers: { Authorization: `Bearer ${json.access_token}` },
+    });
+    const me = await meRes.json().catch(() => ({}));
+    if (!meRes.ok) console.error("graph /me failed", meRes.status, me?.error?.code, me?.error?.message);
+    // Every address this Microsoft account answers to: primary mail, sign-in name, and aliases.
+    const addresses = new Set<string>(
+      [me.mail, me.userPrincipalName, ...(me.otherMails ?? []),
+        ...(me.proxyAddresses ?? []).map((p: string) => String(p).replace(/^smtp:/i, ""))]
+        .filter(Boolean).map((x: string) => String(x).toLowerCase()),
+    );
     const msEmail = String(me.mail || me.userPrincipalName || "").toLowerCase();
 
     const { data: u } = await admin.auth.admin.getUserById(st.user_id);
     const boardEmail = String(u?.user?.email ?? "").toLowerCase();
-    if (!msEmail || msEmail !== boardEmail) {
+    if (!boardEmail || !addresses.has(boardEmail)) {
+      console.error("mailbox mismatch", { boardEmail, msEmail, addresses: [...addresses] });
       return back({ outlook_error: `Sign in to Microsoft as ${boardEmail} (you used ${msEmail || "another account"}).` });
     }
 
-    await admin.from("ms_connections").upsert({
-      user_id: st.user_id, ms_email: msEmail, token_enc: await encrypt(json.refresh_token),
+    const { error: saveErr } = await admin.from("ms_connections").upsert({
+      user_id: st.user_id, ms_email: boardEmail, token_enc: await encrypt(json.refresh_token),
       scopes: String(json.scope ?? ""), updated_at: new Date().toISOString(),
     });
+    if (saveErr) {
+      console.error("saving connection failed", saveErr.message);
+      return back({ outlook_error: "Couldn't save the Outlook connection. Try again." });
+    }
+    console.log("outlook connected", boardEmail);
     return back({ outlook: "connected" });
   } catch (e) {
     if (e instanceof MsError && e.code === "not_configured") return back({ outlook_error: e.message });

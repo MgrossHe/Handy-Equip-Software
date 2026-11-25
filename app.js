@@ -275,16 +275,19 @@
   /* ---------- start the board once signed in and approved ---------- */
   var started = false;
   function start(session) {
+    // Sign-in can report the same session twice (getSession + onAuthStateChange);
+    // claim the start right away so the board only ever loads once.
     if (started) return;
+    started = true;
     var user = session.user;
     gateView("gLoading");
     sb.rpc("is_board_member").then(function (r) {
       if (r.error || r.data !== true) {
+        started = false;
         $("gDeniedEmail").textContent = user.email || "";
         gateView("gDenied");
         return;
       }
-      started = true;
       var name = (user.email || "").split("@")[0];
       sb.from("profiles").upsert({ id: user.id, name: name.charAt(0).toUpperCase() + name.slice(1) }, { onConflict: "id", ignoreDuplicates: true }).then(function () {});
       return sb.from("board_files").select("name,data,updated_at").in("name", FILES).then(function (f) {

@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Office Board</title>
+<style>
+  /* Layout: sticky title bar with view tabs; one view at a time (overview, invoices, customers,
+     promises, Hershy). Tiles and rows drill down into filtered invoice lists. Utilitarian UI. */
+  :root{
+    --bg:#f5f7f9; --surface:#ffffff; --surface-2:#eef1f5;
+    --fg:#1a2130; --muted:#5c6a80; --border:#dce2ec;
+    --accent:#1f6f6b; --accent-fg:#ffffff; --accent-soft:#e3f1ef;
+    --red:#b22027; --red-bg:#fbe9ea;
+    --amber:#8f6200; --amber-bg:#fdf0d7;
+    --green:#1d7a44; --green-bg:#e5f4eb;
+    --slate:#44536b; --slate-bg:#e9edf3;
+    --radius:12px;
+    --fnt-head:"Space Grotesk",system-ui,sans-serif;
+    --fnt-body:"Inter",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0f141b; --surface:#171e27; --surface-2:#1e2732;
+    --fg:#e8edf4; --muted:#9aa7b8; --border:#2a3542;
+    --accent:#4fd0c7; --accent-fg:#06201e; --accent-soft:#16302e;
+    --red:#ff7175; --red-bg:#3a1c1e; --amber:#e8b45a; --amber-bg:#372c13;
+    --green:#5fd08a; --green-bg:#133021; --slate:#aab6c8; --slate-bg:#232e3b;
+    color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0f141b; --surface:#171e27; --surface-2:#1e2732;
+    --fg:#e8edf4; --muted:#9aa7b8; --border:#2a3542;
+    --accent:#4fd0c7; --accent-fg:#06201e; --accent-soft:#16302e;
+    --red:#ff7175; --red-bg:#3a1c1e; --amber:#e8b45a; --amber-bg:#372c13;
+    --green:#5fd08a; --green-bg:#133021; --slate:#aab6c8; --slate-bg:#232e3b;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:var(--fnt-body);line-height:1.5;margin:0;
+    -webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+  body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--surface);z-index:20}
+  a{color:var(--accent)}
+  .wrap{max-width:1100px;margin:0 auto;
+    padding-left:max(16px,env(safe-area-inset-left,0px));
+    padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+  h1,h2,h3{font-family:var(--fnt-head);text-wrap:balance;margin:0}
+  button,input,select{font:inherit;color:inherit}
+
+  header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:21;background:var(--surface);border-bottom:1px solid var(--border)}
+  .bar .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:10px 6px;flex-wrap:wrap}
+  .brand h1{font-size:1.12rem;letter-spacing:-.01em}
+  .brand .sub{font-size:.74rem;color:var(--muted)}
+  .asof{font-size:.72rem;color:var(--muted);text-align:right}
+  .asof b{color:var(--fg);font-weight:600}
+  nav.tabs{display:flex;gap:4px;overflow-x:auto;padding-block:0 8px;scrollbar-width:none}
+  nav.tabs a{text-decoration:none;color:var(--muted);font-size:.84rem;font-weight:600;padding:6px 12px;border-radius:999px;white-space:nowrap}
+  nav.tabs a:hover{color:var(--fg);background:var(--surface-2)}
+  nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+  nav.tabs.main a{font-size:.9rem}
+  nav.tabs.sub{padding-top:0}
+  nav.tabs.main a[aria-current="page"]{background:var(--accent);color:var(--bg, #fff)}
+  nav.tabs.sub{display:none}
+  body[data-sec="ar"] nav.tabs.sub.ar, body[data-sec="cust"] nav.tabs.sub.cust{display:flex}
+  .chip.acc{background:var(--accent-soft);color:var(--accent)}
+  .bad{color:var(--red)}
+  .pills{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px}
+  .pill{font-size:.78rem;font-weight:600;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer}
+  .pill span{font-weight:500;opacity:.8;margin-left:2px}
+  .pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .pill:focus-visible,.chan:focus-visible,.rqhead:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .rqform{margin-bottom:14px} .rqform h3{font-size:1rem;margin-bottom:10px}
+  .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 14px;margin-bottom:12px}
+  .fl{display:flex;flex-direction:column;gap:4px;min-width:0} .fl.wide{grid-column:1/-1}
+  .fl>span{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  .fl input,.fl select,.fl textarea{width:100%;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--surface);font:inherit;color:inherit}
+  .fl textarea{min-height:84px;resize:vertical}
+  .fl input:focus-visible,.fl select:focus-visible,.fl textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .chans{display:flex;gap:6px;flex-wrap:wrap}
+  .chan{font-size:.8rem;font-weight:600;padding:6px 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--fg);cursor:pointer}
+  .chan[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .fu{margin-bottom:12px} .fu h3{font-size:.95rem;margin-bottom:10px} .fl input:disabled,.fl textarea:disabled{opacity:.8}
+  .rqlinks{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 12px;margin-top:-4px}
+  .dlbtn.sm{font-size:.78rem;padding:6px 11px;text-decoration:none;display:inline-block}
+  .rqlinks .btn2{text-decoration:none;padding:6px 11px}
+  .rqlist{display:flex;flex-direction:column;gap:8px}
+  .rq{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+  .rq.late{border-left:4px solid var(--red)} .rq.closed{opacity:.75}
+  .rqhead{display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:center;width:100%;text-align:left;background:none;border:none;padding:12px 14px;cursor:pointer;color:var(--fg)}
+  .rqhead:hover{background:var(--surface-2)}
+  .rqwho{font-weight:600;font-size:.95rem;min-width:0}
+  .rqdue{font-size:.76rem;font-weight:600;color:var(--muted);white-space:nowrap} .rqdue.bad{color:var(--red)}
+  .rqmsg{grid-column:1/-1;font-size:.86rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+  .rqmeta{grid-column:1/-1;font-size:.76rem;color:var(--muted)}
+  .rqbody{border-top:1px solid var(--border);padding:12px 14px;background:var(--surface-2)}
+  .rqfull{white-space:pre-wrap;font-size:.88rem}
+  .upd .fl textarea{background:var(--surface)}
+  .tlh{font-size:.8rem;margin:14px 0 6px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .tl{list-style:none;margin:0;padding:0 0 0 12px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:8px}
+  .tl li{display:flex;flex-direction:column;gap:2px}
+  .tltext{font-size:.86rem;white-space:pre-wrap} .tlch{font-size:.76rem;color:var(--muted)}
+  @media (max-width:560px){ .rqhead{grid-template-columns:1fr auto} .rqdue{grid-column:1/-1} }
+  .offer td{white-space:normal}
+  .homegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:20px}
+  @media (max-width:640px){ .homegrid{grid-template-columns:1fr} }
+  .homecard.em{order:2} .homecard.cu{order:3} .homecard.pu{order:4}
+  .tl .ndate{font-size:.74rem;color:var(--muted)}
+  .homecard{padding:22px 22px 20px;min-height:170px}
+  .homecard .v{font-size:1.9rem}
+  .homecard .go{margin-top:14px;font-size:.84rem;font-weight:600;color:var(--accent)}
+  .homecard .stats{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:.8rem;color:var(--muted)}
+  .homecard .stats b{color:var(--fg);font-size:.95rem}
+  nav.tabs a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+  main{padding-block:18px 48px}
+  .view[hidden]{display:none!important}
+  .vhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .vhead h2{font-size:1.15rem}
+  .vhead .count{font-size:.8rem;color:var(--muted)}
+  section.blk{margin-top:24px}
+  .sec-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .sec-head h3{font-size:1rem}
+  .sec-head .count{font-size:.76rem;color:var(--muted)}
+  .sec-head .rule{flex:1;height:1px;background:var(--border);align-self:center;min-width:20px}
+
+  .banner{background:var(--amber-bg);border:1px solid color-mix(in srgb,var(--amber) 40%,transparent);
+    border-radius:var(--radius);padding:12px 16px;display:flex;gap:12px;align-items:flex-start;font-size:.85rem}
+  .banner .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);margin-top:6px;flex:none}
+  .banner p{margin:0}
+
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px}
+  a.tile{display:block;position:relative;text-decoration:none;color:inherit;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;
+    transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease}
+  a.tile:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 5px 16px rgba(0,0,0,.08)}
+  a.tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  a.tile::after{content:"›";position:absolute;top:9px;right:12px;color:var(--muted);font-size:1.05rem}
+  .tile .k{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .tile .v{font-family:var(--fnt-head);font-size:1.5rem;font-weight:600;margin-top:4px;letter-spacing:-.02em}
+  .tile .n{font-size:.72rem;color:var(--muted);margin-top:3px}
+  .tile.red .v{color:var(--red)} .tile.amber .v{color:var(--amber)} .tile.slate .v{color:var(--slate)}
+
+  /* aging bars */
+  .aging{display:flex;flex-direction:column;gap:6px}
+  .agrow{display:grid;grid-template-columns:92px 1fr 110px 64px;gap:10px;align-items:center;
+    background:none;border:none;padding:4px 6px;border-radius:8px;cursor:pointer;text-align:left;width:100%}
+  .agrow:hover{background:var(--surface-2)}
+  .agrow:focus-visible{outline:2px solid var(--accent)}
+  .agrow .lb{font-size:.82rem;font-weight:600}
+  .agrow .track{height:12px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+  .agrow .fill{height:100%;border-radius:6px;background:var(--accent)}
+  .agrow.old .fill{background:var(--red)}
+  .agrow .amt{font-size:.82rem;text-align:right;font-weight:600}
+  .agrow .cnt{font-size:.74rem;color:var(--muted);text-align:right}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+
+  /* controls + tables */
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .controls input[type=search]{flex:1 1 220px;min-width:0;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+  .controls select{padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+  .controls input:focus-visible,.controls select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .sumline{font-size:.82rem;color:var(--muted);margin-bottom:8px}
+  .sumline b{color:var(--fg)}
+  .tblwrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:.83rem}
+  th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  td.wrapc{white-space:normal;min-width:180px}
+  th{font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:var(--surface-2);position:sticky;top:0;cursor:pointer;user-select:none}
+  th[data-sort]:hover{color:var(--fg)}
+  th .arr{font-size:.7rem;margin-left:2px}
+  td.num,th.num{text-align:right}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr.click{cursor:pointer}
+  tbody tr.click:hover td{background:var(--accent-soft)}
+  .muted{color:var(--muted)}
+  .empty{padding:18px;text-align:center;color:var(--muted)}
+
+  .chip{display:inline-block;font-size:.66rem;font-weight:600;letter-spacing:.03em;text-transform:uppercase;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .chip.red{background:var(--red-bg);color:var(--red)} .chip.amber{background:var(--amber-bg);color:var(--amber)}
+  .chip.green{background:var(--green-bg);color:var(--green)} .chip.slate{background:var(--slate-bg);color:var(--slate)}
+
+  /* customer profile */
+  .profile{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px 18px;margin-bottom:12px}
+  .profile .k{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .profile .v{font-size:.88rem;word-break:break-word}
+  .crumb{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;margin-bottom:8px;background:none;border:none;color:var(--accent);cursor:pointer;padding:0}
+
+  /* promise cards */
+  .plist{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+  .pc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+  .pc.red{border-left:4px solid var(--red)} .pc.amber{border-left:4px solid var(--amber)}
+  .pc.green{border-left:4px solid var(--green)} .pc.slate{border-left:4px solid var(--slate)}
+  .pc .row1{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .pc .nm{font-weight:600;background:none;border:none;padding:0;text-align:left;cursor:pointer;color:var(--fg);text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px}
+  .pc .nm:hover{color:var(--accent)}
+  .pc .amt{font-family:var(--fnt-head);font-weight:600;white-space:nowrap}
+  .pc .q{font-size:.82rem}
+  .pc .d{font-size:.8rem;color:var(--muted)}
+  .pc .links{display:flex;gap:10px;flex-wrap:wrap;font-size:.78rem}
+
+  .checks{margin:0;padding-left:18px;font-size:.85rem;display:flex;flex-direction:column;gap:6px}
+
+  .dlbtn{font-weight:600;font-size:.84rem;cursor:pointer;background:var(--accent);color:var(--accent-fg);border:none;border-radius:10px;padding:9px 14px}
+  .dlbtn:hover{filter:brightness(1.05)} .dlbtn:disabled{opacity:.55;cursor:default}
+  .dlbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .dlmsg{font-size:.78rem;color:var(--muted)} .dlmsg.ok{color:var(--green)} .dlmsg.warn{color:var(--amber)}
+
+  /* call notes */
+  .notes{margin-bottom:14px}
+  .notes h3{font-size:.95rem;margin-bottom:8px}
+  .composer{display:flex;flex-direction:column;gap:8px}
+  .composer[hidden]{display:none}
+  .composer textarea,.nedit textarea{width:100%;min-height:76px;resize:vertical;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);font:inherit;color:inherit}
+  .composer textarea:focus-visible,.nedit textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .crow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .btn2{font-weight:600;font-size:.78rem;cursor:pointer;background:var(--surface);border:1px solid var(--border);color:var(--fg);border-radius:8px;padding:4px 10px}
+  .btn2:hover{border-color:var(--accent);color:var(--accent)}
+  .btn2:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .nlist{list-style:none;margin:12px 0 0;padding:0}
+  .nitem{border-top:1px solid var(--border);padding:10px 0;display:flex;flex-direction:column;gap:4px}
+  .nmeta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.74rem;color:var(--muted)}
+  .nmeta b{color:var(--fg);font-weight:600}
+  .ntext{font-size:.88rem;white-space:pre-wrap;word-break:break-word}
+  .nhist{font-size:.76rem;color:var(--muted)}
+  .nhist summary{cursor:pointer}
+  .nhist div{border-left:2px solid var(--border);padding-left:8px;margin-top:4px;white-space:pre-wrap}
+  td .nsnip{display:block;max-width:280px;white-space:normal;font-size:.8rem}
+  td .ndate{display:block;font-size:.7rem;color:var(--muted)}
+
+  footer{margin-top:36px;border-top:1px solid var(--border);padding-block:16px 0;font-size:.8rem;color:var(--muted)}
+  footer ul{margin:6px 0 0;padding-left:18px}
+  @media (max-width:520px){ .agrow{grid-template-columns:70px 1fr 90px} .agrow .cnt{display:none} .asof{text-align:left} }
+
+  [hidden]{display:none!important}
+  .gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+  .gate .card{width:100%;max-width:400px;padding:28px 24px}
+  .gate h1{font-size:1.35rem;margin-bottom:4px}
+  .gate p{margin:0 0 16px;color:var(--muted);font-size:.9rem}
+  .gate form{display:flex;flex-direction:column;gap:12px}
+  .gate .dlbtn{padding:11px 14px}
+  .gate b{color:var(--fg)}
+  .userbox{display:flex;align-items:center;gap:8px;font-size:.72rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div id="gate" class="gate">
+  <div class="card">
+    <h1>Office Board</h1>
+    <div id="gLoading" hidden><p>Loading…</p></div>
+    <form id="gForm" hidden novalidate>
+      <p>Handy Equip staff only. Enter your work email and we’ll send you a sign-in link.</p>
+      <label class="fl"><span>Work email</span><input id="gEmail" type="email" autocomplete="email" placeholder="you@handyequip.com" required></label>
+      <button class="dlbtn" id="gBtn" type="submit">Email me a sign-in link</button>
+      <span class="dlmsg" id="gateMsg" role="status"></span>
+    </form>
+    <div id="gSent" hidden>
+      <p>Check your inbox at <b id="gSentTo"></b> and click the link to open the board. It can take a minute; check spam if it doesn’t arrive.</p>
+      <button class="btn2" id="gBack" type="button">Use a different email</button>
+    </div>
+    <div id="gDenied" hidden>
+      <p><b id="gDeniedEmail"></b> isn’t approved for Office Board yet. Ask Mendel to add you.</p>
+      <button class="btn2" id="gOut" type="button">Sign out</button>
+    </div>
+  </div>
+</div>
+<div id="app" hidden>
+<header class="bar">
+  <div class="wrap">
+    <div class="top">
+      <div class="brand"><h1>Handy Equip — Office Board</h1><div class="sub">AR · customers · purchasing · email</div></div>
+      <div class="userbox"><span id="whoami"></span><button class="btn2" id="signOut" type="button">Sign out</button></div>
+      <div class="asof">Squid data: <b>Nov 23, 2026</b> · emails checked to <b>Nov 24</b><br>Refreshes when I re-pull Squid</div>
+    </div>
+    <nav class="tabs main" aria-label="Main sections">
+      <a href="#home" data-sec="home">Home</a>
+      <a href="#overview" data-sec="ar">AR management</a>
+      <a href="#sales" data-sec="cust">Customers</a>
+      <a href="#purchasing" data-sec="purch">Purchasing</a>
+      <a href="#email" data-sec="email">Email management</a>
+    </nav>
+    <nav class="tabs sub cust" aria-label="Customer sections">
+      <a href="#sales" data-nav="sales">Sales</a>
+      <a href="#service" data-nav="service">Service</a>
+      <a href="#report" data-nav="report">Status report</a>
+    </nav>
+    <nav class="tabs sub ar" aria-label="AR sections">
+      <a href="#overview" data-nav="overview">Overview</a>
+      <a href="#invoices" data-nav="invoices">Invoices</a>
+      <a href="#customers" data-nav="customers">Customers</a>
+      <a href="#promises" data-nav="promises">Promises</a>
+      <a href="#hershy" data-nav="hershy">Hershy fix-list</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <div class="view" data-view="home">
+    <div class="vhead"><h2>Home</h2><span class="count">pick where to go</span></div>
+    <div class="homegrid">
+      <a class="tile homecard" href="#overview">
+        <div class="k">AR management</div>
+        <div class="v" id="hmAr">—</div><div class="n">to collect · approved invoices</div>
+        <div class="stats"><span><b id="hmAr90">—</b> over 90 days</span><span><b id="hmArH">—</b> Hershy fix-list</span></div>
+        <div class="go">Open AR board →</div>
+      </a>
+      <a class="tile homecard cu" href="#sales">
+        <div class="k">Customers</div>
+        <div class="v" id="hmCu">—</div><div class="n">open requests</div>
+        <div class="stats"><span><b id="hmCuS">—</b> sales</span><span><b id="hmCuV">—</b> service</span><span><b id="hmCuL">—</b> late</span></div>
+        <div class="go">Open customers →</div>
+      </a>
+      <a class="tile homecard pu" href="#purchasing">
+        <div class="k">Purchasing</div>
+        <div class="v" id="hmPu">—</div><div class="n">open purchases</div>
+        <div class="stats"><span><b id="hmPuN">—</b> need to order</span><span><b id="hmPuW">—</b> on the way</span><span><b id="hmPuL">—</b> late</span></div>
+        <div class="go">Open purchasing →</div>
+      </a>
+      <a class="tile homecard em" href="#email">
+        <div class="k">Email management</div>
+        <div class="v" id="hmEm">—</div><div class="n">waiting for your reply</div>
+        <div class="stats"><span><b id="hmEmO">—</b> rack offers</span><span><b id="hmEmD">—</b> drafts to approve</span><span><b id="hmEmP">—</b> payments</span></div>
+        <div class="go">Open email board →</div>
+      </a>
+    </div>
+  </div>
+
+  <div class="view" data-view="overview" hidden>
+    <div class="banner" role="status"><span class="dot"></span>
+      <p><b>Numbers are from the Squid Customer Balance export of Mon Nov 23.</b> Payments made after Nov 23 aren’t in these balances yet; the Email tab shows the ones in your inbox. A live Squid pull will bring everything up to today. In Review invoices aren’t approved yet, so they’re left out of every amount owed.</p>
+    </div>
+    <div class="tiles">
+      <a class="tile" href="#invoices"><div class="k">Total to collect</div><div class="v" id="tTotal">$557,075</div><div class="n">approved (Open) invoices · Nov 23</div></a>
+      <a class="tile" href="#invoices"><div class="k">Open invoices</div><div class="v" id="tInv">443</div><div class="n">In Review not counted</div></a>
+      <a class="tile" href="#customers"><div class="k">Customers owing</div><div class="v" id="tCust">178</div><div class="n">with approved invoices</div></a>
+      <a class="tile red" href="#over90"><div class="k">Over 90 days</div><div class="v" id="t90">$241,183</div><div class="n" id="t90n">314 invoices</div></a>
+      <a class="tile" href="#review"><div class="k">In Review</div><div class="v" id="tRev">$81,591</div><div class="n" id="tRevN">16 invoices · not approved, not due</div></a>
+      <a class="tile amber" href="#promises"><div class="k">Promises to chase</div><div class="v" id="tPromise">8</div><div class="n">broken, due or unconfirmed</div></a>
+      <a class="tile slate" href="#hershy"><div class="k">Hershy fix-list</div><div class="v" id="tHershy">$88,105</div><div class="n" id="tHershyN">24 customers paid but not applied</div></a>
+    </div>
+
+    <section class="blk">
+      <div class="sec-head"><h3>Aging</h3><span class="count">click a row to see those invoices</span><span class="rule"></span></div>
+      <div class="card"><div class="aging" id="aging"></div></div>
+    </section>
+
+    <section class="blk">
+      <div class="sec-head"><h3>Biggest balances</h3><span class="count">click a customer to open their invoices</span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th class="num">Owed</th><th class="num">Invoices</th><th class="num">Oldest (days)</th><th>Your note</th></tr></thead><tbody id="topCust"></tbody></table></div>
+    </section>
+  </div>
+
+  <!-- INVOICES -->
+  <div class="view" data-view="invoices" hidden>
+    <button class="crumb" id="backCust" type="button" hidden>‹ All invoices</button>
+    <div id="custProfile"></div>
+    <div id="custNotes"></div>
+    <div class="vhead"><h2 id="invTitle">Open invoices</h2><span class="count">from Squid, Nov 23</span></div>
+    <div class="controls">
+      <input type="search" id="invQ" placeholder="Search customer, invoice #, SO, email…" aria-label="Search invoices">
+      <select id="invBucket" aria-label="Age">
+        <option value="">All ages</option><option value="1-30">1–30 days</option><option value="31-60">31–60 days</option>
+        <option value="61-90">61–90 days</option><option value="90+">Over 90 days</option><option value="91-180">91–180 days</option>
+        <option value="181-365">181–365 days</option><option value="Over 1 year">Over 1 year</option>
+      </select>
+      <select id="invStatus" aria-label="Status"><option value="Open">Open (approved)</option><option value="In Review">In Review (not approved)</option><option value="">Open + In Review</option></select>
+      <button class="dlbtn" id="invDl" type="button" hidden>⬇ Excel</button>
+      <span class="dlmsg" id="invMsg" role="status"></span>
+    </div>
+    <div id="custFollow"></div>
+    <div class="sumline" id="invSum"></div>
+    <div class="tblwrap"><table id="invTable"><thead><tr>
+      <th data-sort="customer">Customer</th><th data-sort="inv">Invoice</th><th data-sort="status">Status</th>
+      <th data-sort="date">Date</th><th data-sort="dpd" class="num">Days</th><th data-sort="orig" class="num">Original</th>
+      <th data-sort="paid" class="num">Paid</th><th data-sort="bal" class="num">Balance</th><th data-sort="rep">Rep</th>
+    </tr></thead><tbody></tbody></table></div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div class="view" data-view="customers" hidden>
+    <div class="vhead"><h2>Customers owing</h2><span class="count">click a customer to open their invoices</span></div>
+    <div class="controls"><input type="search" id="custQ" placeholder="Search customer, note, rep…" aria-label="Search customers"></div>
+    <div class="sumline" id="custSum"></div>
+    <div class="tblwrap"><table id="custTable"><thead><tr>
+      <th data-sort="customer">Customer</th><th data-sort="open" class="num">Owed (approved)</th><th data-sort="review" class="num">In Review</th><th data-sort="nOpen" class="num">Invoices</th>
+      <th data-sort="oldestOpen" class="num">Oldest (days)</th><th data-sort="credit" class="num">Credits / unapplied</th>
+      <th data-sort="notes">Your sheet note</th><th data-sort="follow">Follow up</th><th>Latest call note</th><th data-sort="rep">Rep</th>
+    </tr></thead><tbody></tbody></table></div>
+    <section class="blk" id="clearedBlk" hidden>
+      <div class="sec-head"><h3>Cleared since Nov 9 — your notes</h3><span class="count" id="clearedSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th>Your sheet note</th><th>Follow up</th></tr></thead><tbody id="clearedTb"></tbody></table></div>
+    </section>
+  </div>
+
+  <!-- PROMISES -->
+  <div class="view" data-view="promises" hidden>
+    <div class="vhead"><h2>Promises</h2><span class="count">from your notes + your email conversations</span></div>
+    <section class="blk" style="margin-top:0">
+      <div class="sec-head"><h3>To chase</h3><span class="count">broken, due, or not yet confirmed in Squid</span><span class="rule"></span></div>
+      <div class="plist" id="pOpen"></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Kept</h3><span class="count">confirmed in Squid by Nov 23</span><span class="rule"></span></div>
+      <div class="plist" id="pKept"></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Other payment notes from email</h3><span class="count">checked against the Nov 23 export</span><span class="rule"></span></div>
+      <div class="plist" id="pSeen"></div>
+    </section>
+  </div>
+
+  <!-- HERSHY -->
+  <div class="view" data-view="hershy" hidden>
+    <div class="vhead"><h2>Hershy — fix-list</h2><span class="count">bookkeeping items to correct in Squid · from the Nov 23 export</span></div>
+    <div class="controls">
+      <button class="dlbtn" id="hDl" type="button" hidden>⬇ Download Excel for Hershy</button>
+      <span class="dlmsg" id="hMsg" role="status"></span>
+    </div>
+    <section class="blk" style="margin-top:6px">
+      <div class="sec-head"><h3>Paid but not applied to invoices</h3><span class="count" id="hApSum"></span><span class="rule"></span></div>
+      <p class="muted" style="font-size:.82rem;margin:0 0 8px">Squid’s customer balance is lower than these customers’ invoices add up to (approved Open invoices; In Review is left out of both numbers). The money came in but wasn’t matched to the invoices. Apply it so the invoices close. Click a customer to see the invoices.</p>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th>Status</th><th class="num">Open invoices</th><th class="num">Squid balance</th><th class="num">Not applied</th><th class="num">Invoices</th></tr></thead><tbody id="hAp"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Things to check</h3><span class="count" id="hcCount"></span><span class="rule"></span></div>
+      <div class="card"><ol class="checks" id="hChecks"></ol></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Unapplied payments, deposits and credits</h3><span class="count" id="hUnSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th class="num">Amount</th><th>Payment #</th><th>Date</th></tr></thead><tbody id="hUn"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Checks / ACH / card charges sitting on Squid’s Open tab</h3><span class="count" id="hNiSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th class="num">Amount</th><th>Type</th><th>Date</th></tr></thead><tbody id="hNi"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Credit balances</h3><span class="count" id="hCrSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th class="num">Credit</th><th>Email</th><th>Phone</th></tr></thead><tbody id="hCr"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Paid in full but still marked Open / In Review</h3><span class="count" id="hPoSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Customer</th><th>Invoice</th><th class="num">Invoice total</th><th>Date</th><th>Status</th></tr></thead><tbody id="hPo"></tbody></table></div>
+    </section>
+  </div>
+
+  <!-- CUSTOMERS + PURCHASING -->
+  <div class="view" data-view="sales" hidden><div id="trk-sales"></div></div>
+  <div class="view" data-view="service" hidden><div id="trk-service"></div></div>
+  <div class="view" data-view="purchasing" hidden><div id="trk-purchasing"></div></div>
+  <div class="view" data-view="report" hidden>
+    <div class="vhead"><h2>Status report</h2><span class="count">where everything is up to · sales, service and purchasing</span></div>
+    <div class="controls"><button class="dlbtn" id="rpDl" type="button" hidden>⬇ Download status report (Excel)</button><span class="dlmsg" id="rpMsg" role="status"></span></div>
+    <div id="rpBody"></div>
+  </div>
+  <datalist id="rqNames"></datalist>
+  <datalist id="rqOwners"><option value="Mendel"><option value="Aron"><option value="Moshy"><option value="Flavio"><option value="Hershy"><option value="Alter"><option value="Mark"></datalist>
+
+  <!-- EMAIL -->
+  <div class="view" data-view="email" hidden>
+    <div class="vhead"><h2>Email</h2><span class="count" id="eAsOf">from your Outlook</span></div>
+    <section class="blk" style="margin-top:6px">
+      <div class="sec-head"><h3>Rack offers — material for sale</h3><span class="count" id="eOffSum"></span><span class="rule"></span></div>
+      <div class="controls">
+        <button class="dlbtn" id="eDl" type="button" hidden>⬇ Download rack offers Excel</button>
+        <span class="dlmsg" id="eMsg" role="status"></span>
+      </div>
+      <div id="eOffers"></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Customer replies on invoices</h3><span class="count" id="eRepSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Date</th><th>Customer</th><th>What they said</th><th></th></tr></thead><tbody id="eRep"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Waiting for your reply</h3><span class="count" id="eWaitSum"></span><span class="rule"></span></div>
+      <div class="tblwrap"><table><thead><tr><th>Date</th><th>Who</th><th>What they need</th><th></th></tr></thead><tbody id="eWait"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Drafts to approve</h3><span class="count" id="eDrSum"></span><span class="rule"></span></div>
+      <p class="muted" style="font-size:.82rem;margin:0 0 8px">Nothing is sent until you approve it. Open Outlook → Drafts to review.</p>
+      <div class="tblwrap"><table><thead><tr><th>Date</th><th>To</th><th>Subject</th><th>Note</th></tr></thead><tbody id="eDr"></tbody></table></div>
+    </section>
+    <section class="blk">
+      <div class="sec-head"><h3>Payments received</h3><span class="count" id="ePaySum"></span><span class="rule"></span></div>
+      <p class="muted" style="font-size:.82rem;margin:0 0 8px">Card payments count only when Sola says Approved. “Paid” claims count once Squid shows them applied.</p>
+      <div class="tblwrap"><table><thead><tr><th>Date</th><th>Customer</th><th class="num">Amount</th><th>How</th><th>Status</th><th>Flag</th><th></th></tr></thead><tbody id="ePay"></tbody></table></div>
+    </section>
+  </div>
+
+  <footer>
+    <b>How this board updates.</b> Squid and email numbers are a snapshot; they change when Claude re-loads the data. Notes and requests save live for everyone signed in.
+    <ul>
+      <li>Squid is read-only: look, never change. No customer is contacted automatically.</li>
+      <li>Card payments count only when Sola says Approved; “paid” claims count once Squid shows them applied.</li>
+      <li>Phone numbers marked “inferred” came from invoice addresses, not a confirmed contact.</li>
+    </ul>
+  </footer>
+</main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
